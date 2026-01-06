@@ -7,6 +7,27 @@ cliente = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 ip_servidor = "127.0.0.1"  # substitua pelo endereço IP do servidor
 porta_servidor = 8888 # substitua pelo número da porta do servidor 
 
+while True:
+    global username
+    username = input("Digite o ID: ")
+
+    if username == '':
+        print("ERRO: Por favor, insira um User ID.")
+
+    elif username.isdigit():
+        print("Insira um ID que contenha caracteres...")
+
+    else:
+        # estabelece conexão com o servidor
+        try: 
+            cliente.connect((ip_servidor, porta_servidor))
+            cliente.send(username.encode("utf-8")[:1020])
+            break
+
+        except ConnectionRefusedError:
+            print("ERRO: Nenhuma conexão foi feita porque a maquina alvo rejeitou/não activa.")
+
+
 def executar_cliente():
     print("=" * 15 + " CLIENTE " + "=" * 15)
     print(f"""Conexão feita com sucesso...
@@ -48,27 +69,6 @@ def executar_cliente():
         cliente.close()
         print("Conexão com o servidor encerrada!!")
 
-
-while True:
-    global username
-    username = input("Digite o ID: ")
-
-    if username == '':
-        print("ERRO: Por favor, insira um User ID.")
-
-    elif username.isdigit():
-        print("Insira um ID que contenha caracteres...")
-
-    else:
-        # estabelece conexão com o servidor
-        try: 
-            cliente.connect((ip_servidor, porta_servidor))
-            cliente.send(username.encode("utf-8")[:1020])
-            executar_cliente()
-            break
-
-        except ConnectionRefusedError:
-            print("ERRO: Nenhuma conexão foi feita porque a maquina alvo rejeitou/não activa.")
 
 
  

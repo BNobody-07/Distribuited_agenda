@@ -2,15 +2,13 @@ import socket
 from pathlib import Path
 from datetime import date, time, datetime
 
-interface = socket.socket(socket.AF_INET, socket.SOCK_STREAM) # type: ignore
-
 count = 0
 user = ""
 current_date = date.today()
 current_datetime = datetime.now()
 
-BOOKING_FILE = Path("booking.txt")
-AUDIT_FILE = Path("audit.txt")
+BOOKING_FILE = Path(f"booking{current_date}_{user}.txt")
+AUDIT_FILE = Path(f"audit_{user}.txt")
 SCHEDULES_FILE = Path("schedules.txt")
 
 def interface():
@@ -75,9 +73,9 @@ def listar_slots():
 def reservar_slot(user):
     print("=" * 8, "RERVERSAR SLOTS", "=" * 8)
     try:
-        comand = int(input("Insira o slot/hora para fazer a reserva [H]: "))
-
         while True:
+            comand = int(input("Insira o slot/hora para fazer a reserva [H]: "))
+
             if comand != type(int):
                 print("ERRO: Valor inserido invalido!")
             
@@ -86,9 +84,6 @@ def reservar_slot(user):
 
             else:
                 break
-
-            comand = int(input("Insira o slot/hora para fazer a reserva [H]: "))
-            
 
         slot_time = time(comand)
         slot_key = {f'slot::{current_date}:{slot_time}'}
@@ -143,7 +138,7 @@ def reservas_user(user):
         else:
             file = open(BOOKING_FILE, "x")
             with open(BOOKING_FILE, 'r') as f:
-                f_char = f.read(1)
+                f_char = f.read(0)
             
             if not f_char:
                 print("Nenhuma reserva foi feita...")
@@ -154,24 +149,75 @@ def reservas_user(user):
         interface()
     
     except FileNotFoundError:
-        print("ERRO: AUDIT or BOOKING FILE DOESN'T EXIST...")
+        print("ERRO: audit.tx ou booking.txt não existem...")
         interface()
 
 def cancelar_reserva(user):
     print("=" * 8, "CANCELAR RESERVA", "=" * 8)
     try:
-        comand = int(input("Insira o slot/hora para cancelar a reserva[H]: "))
-        slot_time = time(comand)
-
-        slot_key = {f'slot::{current_date}:{slot_time}'}
-        count -= 1
+        # Verifica ficheiro de reservas está vazio
+        with open(BOOKING_FILE, 'r') as f:
+            f_char = f.read(0)
+            
+        if not f_char:
+            print("Nenhuma reserva foi feita...")
+            interface()
         
-        if AUDIT_FILE.exists():
-            with open(AUDIT_FILE, "a") as f:
-                f.write(f"{current_datetime} | CANCEL_SUCCESS | {user} | {slot_key}")
+        else:
+            with open(BOOKING_FILE) as f:
+                print(f.read())
 
-    except FileNotFoundError:
-        print("Nehuma reserva para ser cancelada...")
+            while True:
+                comand = int(input("Insira o slot/hora para fazer a reserva [H]: "))
+
+                if comand != type(int):
+                    print("ERRO: Valor inserido invalido!")
+                else:
+                    break
+
+            slot_time = time(comand)
+
+            slot_key = str({f'slot::{current_date}:{slot_time}'})
+            count -= 1
+
+
+            with open(rf"{BOOKING_FILE}", "r") as f:
+                content = f.read()
+                if slot_key in content: # confirma se a slot chave se encontra nas reservas do cliente
+                    with open(BOOKING_FILE, "r+") as f: 
+                        lines = [line for line in f if line.strip() != f'slot::{current_date}:{slot_time}'] # remover o slot cancelado
+                        f.seek(0)
+                        f.writelines(lines)
+                        f.truncate()
+                    
+                    with open(SCHEDULES_FILE, 'a') as f:
+                        f.write(f">> {slot_time}")
+                    
+                    print("Reserva cancelada com sucesso!\n")
+                    print(f"{current_date} às {slot_time}")
+
+                    if AUDIT_FILE.exists():
+                        with open(AUDIT_FILE, "a") as f:
+                            f.write(f"{current_datetime} | CANCEL_SUCCESS | {user} | {slot_key}")
+
+                    else:
+                        file = open(AUDIT_FILE, "x")
+                        with open(AUDIT_FILE, "a") as f:
+                            f.write(f"{current_datetime} | CANCEL_SUCCESS | {user} | {slot_key}")
+
+                else:
+                    with open(rf"{BOOKING_FILE}", "r") as f:
+                        content = f.read()
+                        if slot_key not in content:
+                            print("Falha no cancelamento - reserva não encontrado\n")
+
+                    with open(AUDIT_FILE, "a") as f:
+                        f.write(f"{current_datetime} | CANCEL_FAILED | {user} | {slot_key} - não encontrado ou não reservado")
+                                
+                interface()
+
+    except ValueError:
+        print("ERRO: Inserção do slot não é valida!!")  
         interface()
 
 
@@ -193,7 +239,7 @@ def view_logs():
         interface()
 
     except FileExistsError:
-        print("ERRO: AUDIT or BOOKING FILE DOESN'T EXIST...")
+        print("ERRO: audit.tx ou booking.txt não existem...")
         interface()
 
 # interface()
