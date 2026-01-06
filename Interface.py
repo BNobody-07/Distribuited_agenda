@@ -1,9 +1,11 @@
+import socket
 from pathlib import Path
 from datetime import date, time, datetime
-from Cliente import username
+
+interface = socket.socket(socket.AF_INET, socket.SOCK_STREAM) # type: ignore
 
 count = 0
-# user = username
+user = ""
 current_date = date.today()
 current_datetime = datetime.now()
 
@@ -13,12 +15,11 @@ SCHEDULES_FILE = Path("schedules.txt")
 
 def interface():
     while True:
-        print("\n")
         print("=" * 15, "MENU PRINCIPAL", "=" * 15)
         print('''[1] - Listar slots disponiveis
 [2] - Reservar um slot
-[3] - Cancelar uma reserva 
-[4] - Listar minhas reservas
+[3] - Listar minhas reservas
+[4] - Cancelar uma reserva 
 [5] - Visualizar logs
 [6] - Exit
 ''')
@@ -36,7 +37,7 @@ def interface():
                 case 4:
                     cancelar_reserva(user)
                 case 5:
-                    view_logs(user)
+                    view_logs()
                 case 6:
                     break
                 case _:
@@ -60,7 +61,7 @@ def listar_slots():
                 f.write(f">> {time(x)}")
         
         with open(SCHEDULES_FILE) as f:
-            print(f.read().splitlines())
+            print(f.read())
             f.close()
 
     if AUDIT_FILE.exists():
@@ -74,31 +75,66 @@ def listar_slots():
 def reservar_slot(user):
     print("=" * 8, "RERVERSAR SLOTS", "=" * 8)
     try:
-        comand = input("Insira o slot para fazer a reserva [H]: ")
+        comand = int(input("Insira o slot/hora para fazer a reserva [H]: "))
+
+        while True:
+            if comand != type(int):
+                print("ERRO: Valor inserido invalido!")
+            
+            elif comand < 8 or comand >= 21:
+                print("ERRO: Slot indisponível neste horário!")
+
+            else:
+                break
+
+            comand = int(input("Insira o slot/hora para fazer a reserva [H]: "))
+            
+
         slot_time = time(comand)
+        slot_key = {f'slot::{current_date}:{slot_time}'}
 
-        confirm = {f'slot::{current_date}:{slot_time}'}
+        slot_time = slot_time.strftime("%X") # Convertes a class datetime/time into a str
+        
+        with open(rf"{SCHEDULES_FILE}", "r") as f:
+            content = f.read()
+            if slot_time in content: # verifica se o slot está disponível
+                if BOOKING_FILE.exists() and AUDIT_FILE.exists():
+                    with open(BOOKING_FILE, "a") as f:
+                        f.write(f"{slot_key}")
+                        count += 1
+                    
+                    with open(AUDIT_FILE, "a") as f:
+                        f.write(f"{current_datetime} | BOOK_SUCCESS | {user} | {slot_key}")
+                else:
+                    file = open(BOOKING_FILE, "x")
+                    with open(BOOKING_FILE, "a") as f:
+                        f.write(f"{slot_key}")
 
-        if comand in f:
-            print("Reserva realizada com sucesso!")
-            print(f"{current_date} às {slot_time}")
-            count += 1
-
-            if BOOKING_FILE.exists() and AUDIT_FILE.exists():
-                with open(BOOKING_FILE, "a") as f:
-                    f.write(f"{confirm}")
+                    file = open(AUDIT_FILE, "x")
+                    with open(AUDIT_FILE, "a") as f:
+                        f.write(f"{current_datetime} | BOOK_SUCCESS | {user} | {slot_key}")
+            
+                with open(SCHEDULES_FILE, "r+") as f: 
+                    lines = [line for line in f if line.strip() != f">> {slot_time}"] # remover o slot reservado do horario
+                    f.seek(0)
+                    f.writelines(lines)
+                    f.truncate()
                 
+                print("Reserva realizada com sucesso!")
+                print(f"{current_date} às {slot_time}")
+
+            else:
+                print("Falha na reserva - slot já ocupado ou indisponível!\n")
                 with open(AUDIT_FILE, "a") as f:
-                    f.write(f"{current_datetime} | BOOK_SUCCESS | {user} | {confirm}")
+                        f.write(f"{current_datetime} | BOOK_FAILED | {slot_key} - ocupado ou indisponível")
+            
+            interface()
 
-        else:
-            print("Falha na reserva - slot já ocupado ou indisponível\n")
-
-    except (ValueError, IndexError):
-        print("Nehuma reserva foi feita...")
+    except ValueError:
+        print("ERRO: Inserção do slot não é valida!!")
         interface()
 
-def reservas_user(username):
+def reservas_user(user):
     print("=" * 8, "MINHAS RESERVAS", "=" * 8)
     try:
         if BOOKING_FILE.exists():
@@ -115,31 +151,31 @@ def reservas_user(username):
         if AUDIT_FILE.exists():
             with open("audit.txt", "a") as f:
                 f.write(f"{current_datetime} | LIST_USER_BOOKINGS | {user} | count: {count}")
-
+        interface()
+    
     except FileNotFoundError:
         print("ERRO: AUDIT or BOOKING FILE DOESN'T EXIST...")
         interface()
 
-def cancelar_reserva():
+def cancelar_reserva(user):
     print("=" * 8, "CANCELAR RESERVA", "=" * 8)
     try:
-        comand = input("Insira o slot para cancelar a reserva: ")
-        comand2 = input("Digite a hora do slot que cancelou [H]: ")
-        slot_time = time(comand2)
+        comand = int(input("Insira o slot/hora para cancelar a reserva[H]: "))
+        slot_time = time(comand)
 
-        confirm = {f'slot::{current_date}:{slot_time}'}
+        slot_key = {f'slot::{current_date}:{slot_time}'}
         count -= 1
         
         if AUDIT_FILE.exists():
             with open(AUDIT_FILE, "a") as f:
-                f.write(f"{current_datetime} | CANCEL_SUCCESS | {user} | {confirm}")
+                f.write(f"{current_datetime} | CANCEL_SUCCESS | {user} | {slot_key}")
 
     except FileNotFoundError:
         print("Nehuma reserva para ser cancelada...")
         interface()
 
 
-def view_logs(username):
+def view_logs():
     print("=" * 8, "lOGS", "=" * 8)
     try:
         if AUDIT_FILE.exists():
@@ -161,3 +197,5 @@ def view_logs(username):
         interface()
 
 # interface()
+if __name__ == "__main__":
+    print("Interface.py file")

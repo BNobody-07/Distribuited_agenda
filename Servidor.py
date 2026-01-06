@@ -1,12 +1,7 @@
-from socket import socket
-from datetime import date, time;
-
-# current_date = date.today()
-# horarios = [8, 10, 9, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
-# reservas = []
+import socket
 
 # Cria um objeto socket
-servidor = socket(socket.AF_INET, socket.SOCK_STREAM)
+servidor = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
 # Configurações do servidor
 ip_servidor = "127.0.0.1"  # Substitua pelo IP desejado
@@ -30,7 +25,6 @@ print(f"ID do User: {username_cliente}")
 
 def executar_servidor():
     try:
-        # Loop para receber e responder mensagens
         while True:
             try:
                 # Recebe dados do cliente
@@ -39,10 +33,6 @@ def executar_servidor():
                 if not requisicao:
                     print("Cliente desconectado.")
                     break
-                
-                # Envia resposta ao cliente
-                # resposta = "mensagem recebida e aceita."
-                # socket_cliente.send(resposta.encode("utf-8")[:1028])
 
                 # Encerra conexão se o cliente enviar "close"
                 if requisicao.lower() == "close":
@@ -50,10 +40,7 @@ def executar_servidor():
                     print("Encerrando conexão com o cliente...")
                     break
                 else:
-                    # Recebe a mensagem do cliente
                     break
-                   
-                # Envia mensagem ao cliente
                
             except socket.error as e:
                 print(f"Erro ao processar a solicitação: {e}")
