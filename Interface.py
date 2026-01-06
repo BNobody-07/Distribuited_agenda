@@ -141,6 +141,23 @@ def cancelar_reserva():
 
 def view_logs(username):
     print("=" * 8, "lOGS", "=" * 8)
-    print()
+    try:
+        if AUDIT_FILE.exists():
+            with open(AUDIT_FILE, "a") as f:
+                f.write(f"{current_datetime} | LIST_LOGS | SYSTEM | {current_date}")
+
+        else:
+            file = open(AUDIT_FILE, "x")
+            with open(AUDIT_FILE, "a") as f:
+                f.write(f"{current_datetime} | LIST_LOGS | SYSTEM | {current_date}")
+
+        with open(AUDIT_FILE) as f:
+                print(f.read())
+        
+        interface()
+
+    except FileExistsError:
+        print("ERRO: AUDIT or BOOKING FILE DOESN'T EXIST...")
+        interface()
 
 # interface()
