@@ -1,358 +1,119 @@
-import socket, os
-from time import sleep
-from pathlib import Path
+import socket
+import tkinter as tk
+from tkinter import messagebox, scrolledtext
 from datetime import date, time, datetime
 
 current_date = date.today()
 current_datetime = datetime.now()
 
-# cria um objeto socket
-cliente = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+class ClientGUI:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Sistema de Reservas - Cliente")
+        self.client_socket = None
+        self.username = ""
 
-ip_servidor = "127.0.0.1"  # substitua pelo endereço IP do servidor
-porta_servidor = 8888 # substitua pelo número da porta do servidor 
+        # Username input
+        tk.Label(root, text="Digite o ID do usuário:").pack(pady=5)
+        self.username_entry = tk.Entry(root)
+        self.username_entry.pack(pady=5)
+        tk.Button(root, text="Conectar", command=self.connect_to_server).pack(pady=5)
 
-while True:
-    global username
-    username = input("Digite o ID: ")
+        # Response area
+        self.response_text = scrolledtext.ScrolledText(root, width=50, height=10)
+        self.response_text.pack(pady=10)
 
-    if username == '':
-        print("ERRO: Por favor, insira um User ID.")
+        # Buttons
+        button_frame = tk.Frame(root)
+        button_frame.pack(pady=10)
 
-    elif username.isdigit():
-        print("Insira um ID que contenha caracteres...")
+        tk.Button(button_frame, text="Listar Slots", command=self.list_slots).grid(row=0, column=0, padx=5)
+        tk.Button(button_frame, text="Reservar Slot", command=self.book_slot).grid(row=0, column=1, padx=5)
+        tk.Button(button_frame, text="Ver Reservas", command=self.view_bookings).grid(row=1, column=0, padx=5)
+        tk.Button(button_frame, text="Cancelar Reserva", command=self.cancel_booking).grid(row=1, column=1, padx=5)
+        tk.Button(button_frame, text="Ver Logs", command=self.view_logs).grid(row=2, column=0, padx=5)
+        tk.Button(button_frame, text="Apagar Dados", command=self.delete_data).grid(row=2, column=1, padx=5)
+        tk.Button(button_frame, text="Sair", command=self.exit_app).grid(row=3, column=0, columnspan=2, pady=5)
 
-    else:
-        # estabelece conexão com o servidor
-        try: 
-            cliente.connect((ip_servidor, porta_servidor))
-            cliente.send(username.encode("utf-8")[:1020])
-            break
+        # Slot input
+        tk.Label(root, text="Hora do slot (8-20):").pack(pady=5)
+        self.slot_entry = tk.Entry(root)
+        self.slot_entry.pack(pady=5)
 
-        except ConnectionRefusedError:
-            print("ERRO: Nenhuma conexão foi feita porque a maquina alvo rejeitou/não activa.")
+    def connect_to_server(self):
+        username = self.username_entry.get().strip()
+        if not username or username.isdigit():
+            messagebox.showerror("Erro", "Insira um ID válido (não apenas números).")
+            return
 
-BOOKING_FILE = Path(f"booking{current_date}_{username}.txt")
-AUDIT_FILE = Path(f"audit_{username}.txt")
-SCHEDULES_FILE = Path("schedules.txt")
-
-def interface():
-    while True:
-        print("=" * 15, "MENU PRINCIPAL", "=" * 15)
-        print(f'''[1] - Listar slots disponiveis
-[2] - Reservar um slot
-[3] - Listar minhas reservas
-[4] - Cancelar uma reserva 
-[5] - Visualizar logs
-[6] - Apagar dados
-[7] - Exit
-''')
-        
         try:
-            opcao = int(input("Opção: "))
+            self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.client_socket.connect(("127.0.0.1", 8888))
+            self.client_socket.send(username.encode("utf-8"))
+            self.username = username
+            self.response_text.insert(tk.END, f"Conectado como {username}\n")
+        except Exception as e:
+            messagebox.showerror("Erro", f"Falha na conexão: {e}")
 
-            match opcao:
-                case 1:
-                    listar_slots()
-                case 2:
-                    reservar_slot(username)
-                case 3:
-                    reservas_user(username)
-                case 4:
-                    cancelar_reserva(username)
-                case 5:
-                    view_logs()
-                case 6:
-                    delete_data()
-                case 7:
-                    break
-                case _:
-                    print("Escolha invalida... TENTE NOVAMENTE")
-
-        except ValueError:
-            print("Escolha invalida... TENTE NOVAMENTE")
-            interface()
-
-def listar_slots():
-    print("=" * 8, "SLOTS DISPONIVEIS", "=" * 8)
-    print(f"Data:{current_date} - Slots disponíveis:")
-    
-    if SCHEDULES_FILE.exists():
-        with open(SCHEDULES_FILE, 'r') as f:
-            f_char = f.read(1)  
-
-        if not f_char:
-            with open(SCHEDULES_FILE, "a") as f:
-                for x in range(8, 21):
-                    f.write(f">> {time(x)}\n")
-
-        with open(SCHEDULES_FILE) as f:
-            print(f.read())
-    else:
-        file = open(SCHEDULES_FILE, "x")
-        with open(SCHEDULES_FILE, "a") as f:
-            for x in range(8, 21):
-                f.write(f">> {time(x)}\n")
-
-        with open(SCHEDULES_FILE) as f:
-            print(f.read())
-            f.close()
-
-    if AUDIT_FILE.exists():
-        with open(AUDIT_FILE, "a") as f:
-            f.write(f"{current_datetime} | LIST_SLOTS | SYSTEM | {current_date}\n")
-    else:
-        file = open(AUDIT_FILE, "x")
-        with open(AUDIT_FILE, "a") as f:
-            f.write(f"{current_datetime} | LIST_SLOTS | SYSTEM | {current_date}\n")
-
-def reservar_slot(username):
-    print("=" * 8, "RERVERSAR SLOTS", "=" * 8)
-    try:
-        print("Pressione a tecla Enter para não inserir nenhum slot...")
-        comand = int(input("Insira o slot/hora para fazer a reserva [H]:"))
-            
-        if comand < 8 or comand >= 21:
-            print("ERRO: Slot indisponível neste horário!")
-            reservar_slot(username)
-
-        slot_time = time(comand)
-        slot_key = f"slot::{current_date}:{slot_time}"
-
-        slot_time = slot_time.strftime("%X") # Convertes a class datetime/time into a str
-        
-        with open(rf"{SCHEDULES_FILE}", "r") as f:
-            content = f.read()
-            if slot_time in content: # verifica se o slot está disponível
-                if BOOKING_FILE.exists() and AUDIT_FILE.exists():
-                    with open(BOOKING_FILE, "a") as f:
-                        f.write(f"{slot_key}\n")
-                    
-                    with open(AUDIT_FILE, "a") as f:
-                        f.write(f"{current_datetime} | BOOK_SUCCESS | {username} | {slot_key}\n")
-                else:
-                    file = open(BOOKING_FILE, "x")
-                    with open(BOOKING_FILE, "a") as f:
-                        f.write(f"{slot_key}")
-
-                    file = open(AUDIT_FILE, "x")
-                    with open(AUDIT_FILE, "a") as f:
-                        f.write(f"{current_datetime} | BOOK_SUCCESS | {username} | {slot_key}\n")
-            
-                with open(SCHEDULES_FILE, "r+") as f: 
-                    lines = [line for line in f if line.strip() != f">> {slot_time}"] # remover o slot reservado do horario
-                    f.seek(0)
-                    f.writelines(lines)
-                    f.truncate()
-                
-                print("Reserva realizada com sucesso!")
-                print(f"{current_date} às {slot_time}")
-            
-            else:
-                print("Falha na reserva - slot já ocupado ou indisponível!\n")
-                with open(AUDIT_FILE, "a") as f:
-                        f.write(f"{current_datetime} | BOOK_FAILED | {slot_key} - ocupado ou indisponível\n")
-        
-        interface()
-
-    except ValueError:
-        print("ERRO: Inserção do slot não é valida!!")
-        interface()
-
-def reservas_user(username):
-    print("=" * 8, "MINHAS RESERVAS", "=" * 8)
-    try:
-        if BOOKING_FILE.exists():
-            with open(BOOKING_FILE) as f:
-                print(f.read())
-            
-            with open(BOOKING_FILE, 'r') as f:
-                f_char = f.read(1)
-            
-            if not f_char:
-                print("Nenhuma reserva foi feita...")
-        else:
-            file = open(BOOKING_FILE, "x")
-            with open(BOOKING_FILE) as f:
-                print(f.read())
-                
-            with open(BOOKING_FILE, 'r') as f:
-                f_char = f.read(0)
-            
-            if not f_char:
-                print("Nenhuma reserva foi feita...")
-
-        with open(BOOKING_FILE, 'r') as f:
-            count = sum(1 for line in f)
-
-        if AUDIT_FILE.exists():
-            with open(AUDIT_FILE, "a") as f:
-                f.write(f"{current_datetime} | LIST_USER_BOOKINGS | {username} | count: {count}\n")
-
-        interface()
-    
-    except FileNotFoundError:
-        print("ERRO: audit.tx ou booking.txt não existem...")
-        interface()
-
-def cancelar_reserva(username):
-    print("=" * 8, "CANCELAR RESERVA", "=" * 8)
-    # Verifica ficheiro de reservas está vazio
-    if BOOKING_FILE.exists():
-        with open(BOOKING_FILE, 'r') as f:
-            f_char = f.read(1)
-            
-        if not f_char:
-            print("Nenhuma reserva foi feita...")
-            interface()
-        
-        else:
-            with open(BOOKING_FILE) as f:
-                print(f.read())
-            
-                try:
-                    print("Pressione a tecla Enter para não inserir nenhum slot...")
-                    comand = int(input("Insira o slot/hora para fazer a reserva [H]:"))
-
-                    slot_time = time(comand)
-                    slot_key = str(f"slot::{current_date}:{slot_time}")
-
-                    with open(rf"{BOOKING_FILE}", "r") as f:
-                        content = f.read()
-                        if slot_key in content: # confirma se a slot chave se encontra nas reservas do cliente
-                            with open(BOOKING_FILE, "r+") as f: 
-                                lines = [line for line in f if line.strip() != f'slot::{current_date}:{slot_time}'] # remover o slot cancelado
-                                f.seek(0)
-                                f.writelines(lines)
-                                f.truncate()
-                            
-                            with open(SCHEDULES_FILE, 'a') as f:
-                                f.write(f">> {slot_time}\n")
-
-                            print("Reserva cancelada com sucesso!")
-                            print(f"{current_date} às {slot_time}")
-
-                            if AUDIT_FILE.exists():
-                                with open(AUDIT_FILE, "a") as f:
-                                    f.write(f"{current_datetime} | CANCEL_SUCCESS | {username} | {slot_key}\n")
-
-                            else:
-                                file = open(AUDIT_FILE, "x")
-                                with open(AUDIT_FILE, "a") as f:
-                                    f.write(f"{current_datetime} | CANCEL_SUCCESS | {username} | {slot_key}\n")
-
-                        else:
-                            with open(rf"{BOOKING_FILE}", "r") as f:
-                                content = f.read()
-                                if slot_key not in content:
-                                    print("Falha no cancelamento - reserva não encontrado\n")
-
-                            with open(AUDIT_FILE, "a") as f:
-                                f.write(f"{current_datetime} | CANCEL_FAILED | {username} | {slot_key} - não encontrado ou não reservado\n")
-                                        
-                    interface()
-
-                except ValueError:
-                    print("ERRO: Inserção do slot não é valida!!")  
-                    interface()
-    
-    else:
-        file = open(BOOKING_FILE, "x")
-        cancelar_reserva(username)
-
-def view_logs():
-    print("=" * 8, "lOGS", "=" * 8)
-    try:
-        if AUDIT_FILE.exists():
-            with open(AUDIT_FILE, "a") as f:
-                f.write(f"{current_datetime} | LIST_LOGS | SYSTEM | {current_date}\n")
-
-        else:
-            file = open(AUDIT_FILE, "x")
-            with open(AUDIT_FILE, "a") as f:
-                f.write(f"{current_datetime} | LIST_LOGS | SYSTEM | {current_date}\n")
-
-        with open(AUDIT_FILE) as f:
-                print(f.read())
-        
-        interface()
-
-    except FileExistsError:
-        print("ERRO: audit.tx ou booking.txt não existem...")
-        interface()
-
-
-def delete_data():
-    print("\nTem a certeza que apagar todos os dados?!?")
-    while True:
+    def send_request(self, request):
+        if not self.client_socket:
+            messagebox.showerror("Erro", "Não conectado ao servidor.")
+            return None
         try:
-            comand = input("[S] ou [N]: ").upper()
+            self.client_socket.send(request.encode("utf-8"))
+            response = self.client_socket.recv(4096).decode("utf-8")
+            return response
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro na comunicação: {e}")
+            return None
 
-            if comand == "S":
-                
-                if BOOKING_FILE.exists() and AUDIT_FILE.exists():
-                    print("APAGANDO DADOS...")
-                    os.remove(BOOKING_FILE)
-                    os.remove(AUDIT_FILE)
-                    
-                else:
-                    print("TODOS OS DADOS JÁ FORAM APAGADOS...\n")
+    def list_slots(self):
+        response = self.send_request("LIST")
+        if response:
+            self.response_text.insert(tk.END, response + "\n")
 
-            elif comand == "N":
-                print("Retornando ao menu principal...\n")
-            
-            else:
-                print("Opção invalida... TENTE NOVAMENTE!")
-                delete_data()
+    def book_slot(self):
+        slot = self.slot_entry.get().strip()
+        if not slot.isdigit():
+            messagebox.showerror("Erro", "Insira uma hora válida.")
+            return
+        response = self.send_request(f"BOOK|{slot}")
+        if response:
+            self.response_text.insert(tk.END, response + "\n")
 
-            sleep(2)
-            interface()
+    def view_bookings(self):
+        response = self.send_request("VIEW")
+        if response:
+            self.response_text.insert(tk.END, response + "\n")
 
-        except ValueError:
-            print("Nenhuma opção foi selecionada...")
-            interface()
+    def cancel_booking(self):
+        slot = self.slot_entry.get().strip()
+        if not slot.isdigit():
+            messagebox.showerror("Erro", "Insira uma hora válida.")
+            return
+        response = self.send_request(f"CANCEL|{slot}")
+        if response:
+            self.response_text.insert(tk.END, response + "\n")
 
+    def view_logs(self):
+        response = self.send_request("LOGS")
+        if response:
+            self.response_text.insert(tk.END, response + "\n")
 
-def executar_cliente():
-    print("=" * 15 + " CLIENTE " + "=" * 15)
-    print(f"""Conexão feita com sucesso...
-[close] - Encerrar servidor""")
-    try:
-        while True:
-            interface()
-            print("\nDigite \"close\" para encerrar a conexão com o servidor")
-            print("Digite \"iniciar\" para voltar a conexão com o servidor")
-            mensagem = input()
-        
-            # se cliente digitar "closed", encerramos o loop e fechamos o socket
-            if mensagem.lower() == "close":
-                break
-            
-            elif mensagem.lower() == "iniciar":
-                interface()
-            
-            else:
-                while True:
-                    print("ERRO: Comando inserido não é valido... TENTE NOVAMENTE.")
-                    print("\nDigite \"close\" para encerrar a conexão com o servidor")
-                    print("Digite \"iniciar\" para voltar a conexão com o servidor")
-                    mensagem = input()
+    def delete_data(self):
+        if messagebox.askyesno("Confirmação", "Tem certeza que deseja apagar todos os dados?"):
+            response = self.send_request("DELETE")
+            if response:
+                self.response_text.insert(tk.END, response + "\n")
 
-                    if mensagem.lower() == "close":
-                        break
-                        
-                    elif mensagem.lower() == "iniciar":
-                        break
+    def exit_app(self):
+        if self.client_socket:
+            self.send_request("close")
+            self.client_socket.close()
+        self.root.quit()
 
-            #cliente.send(mensagem.encode("utf-8")[:1024])
-
-    except socket.error as error:
-        print(f"Erro no Cliente: {error}")
-    
-    finally:
-        # fecha o socket do cliente (conexão com o servidor)
-        cliente.close()
-        print("Conexão com o servidor encerrada!!")
-
-executar_cliente()
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = ClientGUI(root)
+    root.mainloop()
  

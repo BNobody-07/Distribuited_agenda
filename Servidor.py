@@ -1,61 +1,142 @@
 import socket
-
-# Cria um objeto socket
-servidor = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+import threading
+import time
+from datetime import date, time, datetime
 
 # Configurações do servidor
-ip_servidor = "127.0.0.1"  # Substitua pelo IP desejado
+ip_servidor = "127.0.0.1"
 porta = 8888
 
-print("=" * 15 + " SERVIDOR " + "=" * 15)
+# Dados compartilhados
+available_slots = [time(hour) for hour in range(8, 21)]  # Slots de 8:00 a 20:00
+bookings = {}  # {username: [slot_times]}
+lock = threading.Lock()
 
-# Associa o socket ao IP e à porta
-servidor.bind((ip_servidor, porta))
-servidor.listen(3)  # Define o número máximo de conexões pendentes
-print(f"Servidor iniciado e aguardando conexões em: {ip_servidor}:{porta}")
+current_date = date.today()
+current_datetime = datetime.now()
 
-# Aguarda uma conexão de cliente e o seu username
-socket_cliente, endereco_cliente = servidor.accept()
-
-global username_cliente
-username_cliente = socket_cliente.recv(1020).decode("utf-8")
-
-print(f"Conexão aceita de {endereco_cliente[0]}:{endereco_cliente[1]}")
-print(f"ID do User: {username_cliente}")
-
-def executar_servidor():
+def handle_client(client_socket, address, username):
+    print(f"Conexão aceita de {address[0]}:{address[1]} - User: {username}")
     try:
         while True:
-            try:
-                # Recebe dados do cliente
-                requisicao = socket_cliente.recv(1024).decode("utf-8") # Converte bytes para string
-                
-                if not requisicao:
-                    print("Cliente desconectado.")
-                    break
-
-                # Encerra conexão se o cliente enviar "close"
-                if requisicao.lower() == "close":
-                    socket_cliente.send("Conexão encerrada pelo servidor.".encode("utf-8"))
-                    print("Encerrando conexão com o cliente...")
-                    break
-                else:
-                    break
-               
-            except socket.error as e:
-                print(f"Erro ao processar a solicitação: {e}")
+            request = client_socket.recv(1024).decode("utf-8")
+            if not request:
+                break
+            if request.lower() == "close":
+                client_socket.send("Conexão encerrada.".encode("utf-8"))
                 break
 
-        # Fecha o socket de conexão com o cliente
-        socket_cliente.close()
-        print("\nConexão com o cliente encerrada!!")
+            response = process_request(request, username)
+            client_socket.send(response.encode("utf-8"))
 
-    except socket.error as e:
-        print(f"Erro no servidor: {e}")
-
+    except Exception as e:
+        print(f"Erro com cliente {username}: {e}")
     finally:
-        # Fecha o socket do servidor
-        servidor.close()
-        print("Servidor encerrado...")
+        client_socket.close()
+        print(f"Conexão com {username} encerrada.")
 
-# executar_servidor()
+def process_request(request, username):
+    global available_slots, bookings
+    parts = request.split("|")
+    command = parts[0].upper()
+
+    with lock:
+        if command == "LIST":
+            slots_str = "\n".join([f">> {slot.strftime('%H:%M:%S')}" for slot in available_slots])
+            
+            with open(f"audit_{username}.txt", "a") as f:
+                    f.write(f"{current_datetime} | LIST_SLOTS | SYSTEM | {current_date}\n")
+            
+            return f"\nSlots disponíveis:\n{slots_str}"
+        
+
+        elif command == "BOOK":
+            if len(parts) < 2:
+                return "Erro: Hora não fornecida."
+            try:
+                hour = int(parts[1])
+                slot_time = time(hour)
+                if slot_time not in available_slots:
+                    with open(f"audit_{username}.txt", "a") as f:
+                        f.write(f"{current_datetime} | BOOK_FAILED | {username} | slot::{current_date}:{slot_time} - already booked\n")
+                    return "Slot indisponível ou já reservado."
+                available_slots.remove(slot_time)
+                if username not in bookings:
+                    bookings[username] = []
+                bookings[username].append(slot_time)
+                # Log
+                with open(f"audit_{username}.txt", "a") as f:
+                    f.write(f"{current_datetime} | BOOK_SUCCESS | {username} | slot::{current_date}:{slot_time}\n")
+                return f"Reserva realizada: {current_date} às {slot_time.strftime('%H:%M:%S')}"
+            except ValueError:
+                return "Hora inválida."
+
+        elif command == "VIEW":
+            user_bookings = bookings.get(username, [])
+            if not user_bookings:
+                with open(f"audit_{username}.txt", "a") as f:
+                    f.write(f"{current_datetime} | LIST_USER_BOOKINGS | {username} | count:{len(bookings[username])}\n")
+                return "Nenhuma reserva."
+            bookings_str = "\n".join([f"slot::{current_date}:{slot.strftime('%H:%M:%S')}" for slot in user_bookings])
+            with open(f"audit_{username}.txt", "a") as f:
+                    f.write(f"{current_datetime} | LIST_USER_BOOKINGS | {username} | count:{len(bookings[username])}\n")
+            return f"\nSuas reservas:\n{bookings_str}"
+
+        elif command == "CANCEL":
+            if len(parts) < 2:
+                return "Erro: Hora não fornecida."
+            try:
+                hour = int(parts[1])
+                slot_time = time(hour)
+                if username not in bookings or slot_time not in bookings[username]:
+                    with open(f"audit_{username}.txt", "a") as f:
+                        f.write(f"{current_datetime} | CANCEL_FAILED | {username} | slot::{current_date}:{slot_time} - not found\n")
+                    return "Reserva não encontrada."
+                bookings[username].remove(slot_time)
+                available_slots.append(slot_time)
+                available_slots.sort()
+                # Log
+                with open(f"audit_{username}.txt", "a") as f:
+                    f.write(f"{current_datetime} | CANCEL_SUCCESS | {username} | slot::{current_date}:{slot_time}\n")
+                return f"Reserva cancelada: {current_date} às {slot_time.strftime('%H:%M:%S')}"
+            except ValueError:
+                return "Hora inválida."
+
+        elif command == "LOGS":
+            try:
+                with open(f"audit_{username}.txt", "r") as f:
+                    logs = f.read()
+                return logs if logs else "Nenhum log."
+            except FileNotFoundError:
+                return "Arquivo de log não encontrado."
+
+        elif command == "DELETE":
+            if username in bookings:
+                del bookings[username]
+            try:
+                import os
+                os.remove(f"audit_{username}.txt")
+            except FileNotFoundError:
+                pass
+            return "Dados apagados."
+
+        else:
+            return "Comando inválido."
+
+def main():
+    servidor = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    servidor.bind((ip_servidor, porta))
+    servidor.listen(5)
+    print("=" * 15 + " SERVIDOR " + "=" * 15)
+    print(f"Servidor iniciado em {ip_servidor}:{porta}")
+
+    try:
+        while True:
+            client_socket, address = servidor.accept()
+            username = client_socket.recv(1024).decode("utf-8")
+            threading.Thread(target=handle_client, args=(client_socket, address, username)).start()
+    except KeyboardInterrupt:
+        print("Servidor encerrado.")
+
+if __name__ == "__main__":
+    main()
