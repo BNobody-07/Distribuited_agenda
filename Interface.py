@@ -1,4 +1,3 @@
-import socket
 from pathlib import Path
 from datetime import date, time, datetime
 
@@ -56,7 +55,7 @@ def listar_slots():
         file = open(SCHEDULES_FILE, "x")
         with open(SCHEDULES_FILE, "a") as f:
             for x in range(8, 21):
-                f.write(f">> {time(x)}")
+                f.write(f">> {time(x)}\n")
         
         with open(SCHEDULES_FILE) as f:
             print(f.read())
