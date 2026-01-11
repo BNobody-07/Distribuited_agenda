@@ -6,7 +6,6 @@ from datetime import date, datetime
 current_date = date.today()
 current_datetime = datetime.now()
 
-# ip = "172.20.10.10"
 ip = "127.0.0.1"
 port = 8080
 
@@ -56,7 +55,7 @@ class ClientGUI:
             self.client_socket.connect((ip, port))
             self.client_socket.send(username.encode("utf-8"))
             self.username = username
-            self.response_text.insert(tk.END, f"Conectado como {username}\n")
+            self.response_text.insert(tk.END, f"✅ Conectado como {username}\n")
         except Exception as e:
             messagebox.showerror("Erro", f"Falha na conexão: {e}")
 
@@ -96,6 +95,7 @@ class ClientGUI:
     def view_bookings(self):
         response = self.send_request("VIEW")
         if response:
+            self.response_text.insert(tk.END, "=" * 12 + " RESERVAS " + "=" * 12)
             self.response_text.insert(tk.END, response + "\n")
 
     # Cancelar Reservas
@@ -112,6 +112,7 @@ class ClientGUI:
     def view_logs(self):
         response = self.send_request("LOGS")
         if response:
+            self.response_text.insert(tk.END, "=" * 12 + " LOGS " + "=" * 12 + "\n")
             self.response_text.insert(tk.END, response + "\n")
 
     # Apagar todos os dados do utilizador

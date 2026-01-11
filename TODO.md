@@ -1,0 +1,8 @@
+- [ ] Modify Servidor.py to replace bookings dictionary with text file storage
+- [ ] Add helper functions for loading and saving user bookings
+- [ ] Update BOOK command to use file storage
+- [ ] Update VIEW command to read from file
+- [ ] Update CANCEL command to modify file
+- [ ] Update DELETE command to remove file
+- [ ] Initialize available_slots by loading existing bookings at startup
+- [ ] Test the changes
