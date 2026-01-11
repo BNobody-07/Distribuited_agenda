@@ -2,6 +2,12 @@
 
 Um sistema distribuído de agendamento de compromissos (Serviços/Consultas) construído em Python, apresentando uma interface gráfica do usuário (GUI) para clientes e um servidor multi-threaded que lida com reservas concorrentes enquanto previne reservas duplicadas.
 
+Apresentamos assim os responsaveis de cada cargo:
+
+Bruno Mouzinho - Coordenador(a) do grupo (gestão e integração)
+Daniel Matende - Responsável técnico (arquitetura e implementação)
+Yanick Benedito - Responsável por testes e documentação (qualidade e relatório)
+
 ## Funcionalidades
 
 - **GUI do Cliente**: Interface intuitiva baseada em Tkinter para interação fácil
